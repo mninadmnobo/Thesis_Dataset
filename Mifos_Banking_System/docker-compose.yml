@@ -1,0 +1,55 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: mifos-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./fineract/config/docker/mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  fineract:
+    image: openmf/fineract:latest
+    container_name: fineract-server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      FINERACT_HIKARI_JDBC_URL: jdbc:mariadb://mysql:3306/fineract_tenants?allowPublicKeyRetrieval=true
+      FINERACT_HIKARI_USERNAME: root
+      FINERACT_HIKARI_PASSWORD: root
+      FINERACT_DEFAULT_TENANTDB_HOSTNAME: mysql
+      FINERACT_DEFAULT_TENANTDB_PORT: 3306
+      FINERACT_DEFAULT_TENANTDB_UID: root
+      FINERACT_DEFAULT_TENANTDB_PWD: root
+      FINERACT_DEFAULT_TENANTDB_NAME: fineract_default
+      FINERACT_DEFAULT_TENANTDB_CONN_PARAMS: "allowPublicKeyRetrieval=true"
+    ports:
+      - "8443:8443"
+
+  web:
+    image: openmf/web-app:master
+    container_name: mifos-ui
+    restart: unless-stopped
+    depends_on:
+      - fineract
+    environment:
+      FINERACT_API_URLS: https://localhost:8443
+      FINERACT_API_URL: https://localhost:8443
+      FINERACT_PLATFORM_TENANTID: default
+      FINERACT_API_PROVIDER: /fineract-provider/api
+      FINERACT_API_VERSION: /v1
+    ports:
+      - "4200:80"
+
+volumes:
+  mysql-data:
